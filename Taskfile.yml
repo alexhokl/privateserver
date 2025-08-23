@@ -1,0 +1,41 @@
+version: "3"
+
+tasks:
+  build:
+    desc: Build
+    cmd: go build -o /dev/null
+
+  test:
+    desc: Test
+    cmd: go test ./...
+
+  coverage:
+    desc: Test with coverage
+    cmd: go test --cover ./...
+
+  coverage-html:
+    desc: Test with coverage in HTML
+    cmd: go test -coverprofile=coverage.out ./... && go tool cover -html=coverage.out -o coverage.html
+
+  open-coverage-html:
+    desc: Test with coverage in HTML and open the HTML
+    cmds:
+      - task coverage-html
+      - open coverage.html
+
+  bench:
+    desc: Run benchmarks on CPU and memory
+    cmd: go test -bench=. -benchmem ./...
+
+  bench-profile:
+    desc: Run benchmarks on CPU and memory and create a profile
+    cmds:
+      - go test -bench=. -benchmem -memprofile ./benchmarks/collection.mem.prof -cpuprofile ./benchmarks/collection.cpu.prof ./collection/
+
+  lint:
+    desc: Lint
+    cmd: golangci-lint run
+
+  sec:
+    desc: Security check
+    cmd: gosec ./...
