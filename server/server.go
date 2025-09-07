@@ -122,6 +122,14 @@ func (s *Server) GetCallerIndentity(r *http.Request) (*apitype.WhoIsResponse, er
 	return who, nil
 }
 
+func (s *Server) GetCallerIdentityFromRemoteIPAddress(ctx context.Context, ipAddress string) (*apitype.WhoIsResponse, error) {
+	who, err := s.tsClient.WhoIs(ctx, ipAddress)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get caller identity from tailscale API: %w", err)
+	}
+	return who, nil
+}
+
 func (s *Server) FQDN() string {
 	return s.fqdn
 }
