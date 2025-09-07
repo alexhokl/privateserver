@@ -55,7 +55,7 @@ func main() {
 		log.Fatalf("Failed to create server: %v", err)
 	}
 
-	listener, nonHTTPSListener, nonHTTPSHandler, err := srv.Listen()
+	listeners, nonHTTPSListener, nonHTTPSHandler, err := srv.Listen([]int{443})
 	if err != nil {
 		log.Fatalf("Failed to start listening: %v", err)
 	}
@@ -73,22 +73,30 @@ func main() {
 		}
 	}))
 
-	go func() {
+	g, _ := errgroup.WithContext(context.Background())
+
+	g.Go(func() error {
 		log.Printf("Starting non-HTTPS server on %s", nonHTTPSListener.Addr().String())
 		server := &http.Server{
 			Handler:      nonHTTPSHandler,
 			ReadTimeout:  10 * time.Second,
 			WriteTimeout: 10 * time.Second,
 		}
-		log.Fatal(server.Serve(nonHTTPSListener))
-	}()
+		return server.Serve(nonHTTPSListener)
+	})
 
-	log.Printf("Starting HTTPS server on %s", listener.Addr().String())
-	server := &http.Server{
-		Handler:      mux,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
+	for _, listener := range listeners {
+		g.Go(func() error {
+			log.Printf("Starting HTTPS server on %s", listener.Addr().String())
+			server := &http.Server{
+				Handler:      mux,
+				ReadTimeout:  10 * time.Second,
+				WriteTimeout: 10 * time.Second,
+			}
+			return server.Serve(listener)
+		})
 	}
-	log.Fatal(server.Serve(listener))
+
+	log.Fatal(g.Wait())
 }
 ```

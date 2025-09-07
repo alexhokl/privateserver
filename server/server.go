@@ -18,9 +18,8 @@ import (
 )
 
 const (
-	HTTPAddress  = ":80"
-	HTTPSAddress = ":443"
-	Protocol     = "tcp"
+	HTTPAddress = ":80"
+	Protocol    = "tcp"
 )
 
 type Server struct {
@@ -80,20 +79,29 @@ out:
 	return srv, nil
 }
 
-// Listen starts listening on both HTTP and HTTPS ports. It returns the
-// listeners and the HTTP handler for non-HTTPS requests.
-func (s *Server) Listen() (listener net.Listener, nonHTTPSListener net.Listener, nonHTTPSHandler http.Handler, err error) {
+// Listen starts listening on the specified ports and returns the TLS listeners.
+// If port 443 is among the specified ports, it also sets up a non-TLS listener
+// on port 80 that redirects all HTTP requests to HTTPS.
+func (s *Server) Listen(httpsPorts []int) (listeners []net.Listener, nonHTTPSListener net.Listener, nonHTTPSHandler http.Handler, err error) {
+	listeners = make([]net.Listener, 0, len(httpsPorts))
 
-	nonHTTPSHandler = nonHTTPSHandlerFromHostname(s.fqdn)
-	nonHTTPSListener, err = s.tsServer.Listen(Protocol, HTTPAddress)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to listen non-TLS at [%s]: %w", HTTPAddress, err)
+	for _, port := range httpsPorts {
+		addr := fmt.Sprintf(":%d", port)
+		listener, err := s.tsServer.ListenTLS(Protocol, addr)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to listen TLS at [%s]: %w", addr, err)
+		}
+		listeners = append(listeners, listener)
+
+		if port == 443 {
+			nonHTTPSHandler = nonHTTPSHandlerFromHostname(s.fqdn)
+			nonHTTPSListener, err = s.tsServer.Listen(Protocol, HTTPAddress)
+			if err != nil {
+				return nil, nil, nil, fmt.Errorf("failed to listen non-TLS at [%s]: %w", HTTPAddress, err)
+			}
+		}
 	}
-	listener, err = s.tsServer.ListenTLS(Protocol, HTTPSAddress)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to listen TLS at [%s]: %w", HTTPSAddress, err)
-	}
-	return listener, nonHTTPSListener, nonHTTPSHandler, nil
+	return listeners, nonHTTPSListener, nonHTTPSHandler, nil
 }
 
 // Close shuts down the tailscale server.
@@ -112,6 +120,10 @@ func (s *Server) GetCallerIndentity(r *http.Request) (*apitype.WhoIsResponse, er
 		return nil, fmt.Errorf("failed to get caller identity from tailscale API: %w", err)
 	}
 	return who, nil
+}
+
+func (s *Server) FQDN() string {
+	return s.fqdn
 }
 
 // nonHTTPSHandlerFromHostname returns the http.Handler for serving all
