@@ -1,9 +1,10 @@
+---
 version: "3"
 
 tasks:
   build:
     desc: Build
-    cmd: go build -o /dev/null
+    cmd: go build -o /dev/null ./...
 
   test:
     desc: Test
