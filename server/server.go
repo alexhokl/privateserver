@@ -3,6 +3,7 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log"
 	"net"
@@ -82,15 +83,24 @@ out:
 // Listen starts listening on the specified ports and returns the TLS listeners.
 // If port 443 is among the specified ports, it also sets up a non-TLS listener
 // on port 80 that redirects all HTTP requests to HTTPS.
+// The TLS listeners are configured with HTTP/2 support via ALPN negotiation.
 func (s *Server) Listen(httpsPorts []int) (listeners []net.Listener, nonHTTPSListener net.Listener, nonHTTPSHandler http.Handler, err error) {
 	listeners = make([]net.Listener, 0, len(httpsPorts))
 
+	// Create TLS config with HTTP/2 support
+	tlsConfig := &tls.Config{
+		GetCertificate: s.tsClient.GetCertificate,
+		NextProtos:     []string{"h2", "http/1.1"},
+	}
+
 	for _, port := range httpsPorts {
 		addr := fmt.Sprintf(":%d", port)
-		listener, err := s.tsServer.ListenTLS(Protocol, addr)
+		ln, err := s.tsServer.Listen(Protocol, addr)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("failed to listen TLS at [%s]: %w", addr, err)
+			return nil, nil, nil, fmt.Errorf("failed to listen at [%s]: %w", addr, err)
 		}
+		// Wrap the listener with TLS
+		listener := tls.NewListener(ln, tlsConfig)
 		listeners = append(listeners, listener)
 
 		if port == 443 {
